@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Biblioteca</title>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        h2 {
+            color: #555;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 10px 0;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .card h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #333;
+        }
+        .card p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gestor de Biblioteca</h1>
+        <h2>Agregar Libro</h2>
+        <input type="number" id="libroId" placeholder="ID" required>
+        <input type="text" id="titulo" placeholder="Título" required>
+        <input type="text" id="autor" placeholder="Autor" required>
+        <input type="number" id="anio" placeholder="Año" required>
+        <button id="agregar">Agregar Libro</button>
+        
+        <h2>Libros Almacenados</h2>
+        <button id="mostrar">Mostrar Libros</button>
+        <div id="resultado"></div>
+
+        <h2>Modificar Libro</h2>
+        <input type="number" id="modificarId" placeholder="ID del libro a modificar" required>
+        <input type="text" id="nuevoTitulo" placeholder="Nuevo Título">
+        <input type="text" id="nuevoAutor" placeholder="Nuevo Autor">
+        <input type="number" id="nuevoAnio" placeholder="Nuevo Año">
+        <button id="modificar">Modificar Libro</button>
+
+        <h2>Eliminar Libro</h2>
+        <input type="number" id="eliminarId" placeholder="ID del libro a eliminar" required>
+        <button id="eliminar">Eliminar Libro</button>
+    </div>
+
+    <script>
+        const dbName = 'Biblioteca';
+        const storeName = 'Libros';
+        const notificationsStore = 'Notificaciones';
+        let db;
+
+        const request = indexedDB.open(dbName, 2);
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+
+            // Almacén de Libros
+            if (!db.objectStoreNames.contains(storeName)) {
+                const objectStore = db.createObjectStore(storeName, { keyPath: 'id' });
+                objectStore.createIndex('titulo', 'titulo', { unique: false });
+                objectStore.createIndex('autor', 'autor', { unique: false });
+                objectStore.createIndex('anio', 'anio', { unique: false });
+            }
+
+            // Almacén de Notificaciones
+            if (!db.objectStoreNames.contains(notificationsStore)) {
+                db.createObjectStore(notificationsStore, { autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            console.log('Base de datos abierta con éxito');
+            // Registrar el Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('Service Worker registrado con éxito'))
+                .catch(error => console.error('Error al registrar el Service Worker:', error));
+            }
+        };
+
+        // Funciones de manejo de datos y notificaciones
+        function enviarNotificacion(titulo, mensaje) {
+            // Guardar la notificación en IndexedDB
+            const transaction = db.transaction([notificationsStore], 'readwrite');
+            const objectStore = transaction.objectStore(notificationsStore);
+            objectStore.add({ titulo, mensaje, fecha: new Date() });
+
+            // Enviar la notificación al Service Worker
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ titulo, mensaje });
+            }
+        }
+
+        document.getElementById('agregar').onclick = () => {
+            const libro = {
+                id: parseInt(document.getElementById('libroId').value),
+                titulo: document.getElementById('titulo').value,
+                autor: document.getElementById('autor').value,
+                anio: parseInt(document.getElementById('anio').value)
+            };
+            insertarLibro(libro);
+        };
+
+        document.getElementById('mostrar').onclick = mostrarLibros;
+        
+
+        document.getElementById('modificar').onclick = () => {
+            const id = parseInt(document.getElementById('modificarId').value);
+            const libro = {
+                id: id,
+                titulo: document.getElementById('nuevoTitulo').value || null,
+                autor: document.getElementById('nuevoAutor').value || null,
+                anio: parseInt(document.getElementById('nuevoAnio').value) || null
+            };
+            modificarLibro(libro);
+        };
+
+        document.getElementById('eliminar').onclick = () => {
+            const id = parseInt(document.getElementById('eliminarId').value);
+            eliminarLibro(id);
+        };
+
+        function mostrarLibros() {
+            const transaction = db.transaction([storeName], 'readonly');
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.getAll();
+
+            request.onsuccess = (event) => {
+                const libros = event.target.result;
+                const resultadoDiv = document.getElementById('resultado');
+                resultadoDiv.innerHTML = '';
+
+                libros.forEach(libro => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <h3>${libro.titulo}</h3>
+                        <p><strong>Autor:</strong> ${libro.autor}</p>
+                        <p><strong>Año:</strong> ${libro.anio}</p>
+                    `;
+                    resultadoDiv.appendChild(card);
+                });
+            };
+
+            request.onerror = (event) => {
+                console.error('Error al recuperar los libros:', event.target.error);
+            };
+        }
+
+        function insertarLibro(libro) {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.add(libro);
+
+            request.onsuccess = () => {
+                enviarNotificacion('Libro Agregado', `Se ha agregado el libro "${libro.titulo}"`);
+            };
+
+            request.onerror = (event) => {
+                console.error('Error al insertar el libro:', event.target.error);
+            };
+        }
+
+        function modificarLibro(libro) {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.get(libro.id);
+
+            request.onsuccess = (event) => {
+                const data = event.target.result;
+                if (data) {
+                    if (libro.titulo !== null) data.titulo = libro.titulo;
+                    if (libro.autor !== null) data.autor = libro.autor;
+                    if (libro.anio !== null) data.anio = libro.anio;
+
+                    const updateRequest = objectStore.put(data);
+                    updateRequest.onsuccess = () => {
+                        enviarNotificacion('Libro Modificado', `Se ha modificado el libro "${data.titulo}"`);
+                    };
+                } else {
+                    console.error('Libro no encontrado');
+                }
+            };
+
+            request.onerror = (event) => {
+                console.error('Error al modificar el libro:', event.target.error);
+            };
+        }
+
+        function eliminarLibro(id) {
+            const transaction = db.transaction([storeName], 'readwrite');
+            const objectStore = transaction.objectStore(storeName);
+            const request = objectStore.delete(id);
+
+            request.onsuccess = () => {
+                enviarNotificacion('Libro Eliminado', `Se ha eliminado el libro con ID ${id}`);
+            };
+
+            request.onerror = (event) => {
+                console.error('Error al eliminar el libro:', event.target.error);
+            };
+        }
+    </script>
+</body>
+</html>

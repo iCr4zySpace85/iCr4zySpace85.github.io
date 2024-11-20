@@ -1,7 +1,7 @@
 const cacheName = 'biblioteca-cache-v1';
 const resourcesToCache = [
     '/',
-    '/indexdb.html',
+    '/index.html',
     '/manifest.json',
     '/icons/yomerenges.jpg',
     '/style.css',
@@ -42,7 +42,7 @@ self.addEventListener('push', event => {
     event.waitUntil(
         self.registration.showNotification('Biblioteca', {
             body: data,
-            icon: '/icons/yomerenges.jpg'
+            icon: '/yomerenges.jpg'
         })
     );
 });

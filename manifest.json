@@ -1,19 +1,19 @@
 {
     "name": "Biblioteca PWA",
     "short_name": "Biblioteca",
-    "start_url": "/indexdb.html",
+    "start_url": "/index.html",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#4CAF50",
     "description": "Aplicación de biblioteca offline usando IndexedDB",
     "icons": [
       {
-        "src": "/icons/yomerenges.jpg",
+        "src": "/yomerenges.jpg",
         "sizes": "192x192",
         "type": "image/png"
       },
       {
-        "src": "/icons/yomerenges.jpg",
+        "src": "/yomerenges.jpg",
         "sizes": "512x512",
         "type": "image/png"
       }
